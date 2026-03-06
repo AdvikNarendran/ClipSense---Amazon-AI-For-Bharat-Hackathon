@@ -1,0 +1,29 @@
+# Python stuff
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# AWS/Local secrets
+.env
+.aws/
+
+# OS stuff
+.DS_Store
+Thumbs.db
+
+# Project stuff
+tmp/
+*.mp4
+*.mkv
+*.avi
+logs/
+tests/
+frontend/
+node_modules/

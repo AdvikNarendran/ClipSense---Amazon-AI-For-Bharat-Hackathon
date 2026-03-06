@@ -1,0 +1,13 @@
+streamlit
+moviepy<2.0
+librosa
+mediapipe
+openai-whisper
+google-generativeai
+python-dotenv
+opencv-python
+streamlit-option-menu
+flask
+flask-cors
+imageio-ffmpeg
+boto3

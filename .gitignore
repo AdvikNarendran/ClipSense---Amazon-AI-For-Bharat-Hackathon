@@ -1,0 +1,31 @@
+# Common
+node_modules/
+.DS_Store
+Thumbs.db
+.env
+.env.local
+.env.*.local
+
+# Backend
+backend/__pycache__/
+backend/*.py[cod]
+backend/venv/
+backend/generated_clips/
+backend/uploads/
+backend/*.mp4
+backend/*.mov
+backend/*.wav
+backend/ffmpeg.exe
+backend/ffmpeg-win32-v*.exe
+
+# Frontend
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.vercel
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+# IDEs
+.vscode/
+.idea/
