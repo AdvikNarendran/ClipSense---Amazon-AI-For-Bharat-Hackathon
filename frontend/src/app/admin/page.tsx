@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import {
     getAdminMetrics,
     getAdminUsers,
@@ -22,6 +22,14 @@ import {
 type TabType = "metrics" | "creators" | "projects";
 
 export default function AdminDashboard() {
+    return (
+        <Suspense fallback={<div className="p-10 text-center animate-pulse">Accessing Executive Intelligence...</div>}>
+            <AdminDashboardContent />
+        </Suspense>
+    );
+}
+
+function AdminDashboardContent() {
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
