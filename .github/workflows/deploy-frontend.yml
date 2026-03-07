@@ -1,0 +1,23 @@
+name: Deploy Frontend to Amplify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+
+# Amplify auto-deploys on push, this workflow is optional
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify deployment
+        run: |
+          echo "=========================================="
+          echo "Frontend Deployment"
+          echo "=========================================="
+          echo "AWS Amplify will automatically deploy the frontend"
+          echo "when changes are pushed to the main branch."
+          echo ""
+          echo "Monitor deployment in AWS Amplify Console:"
+          echo "https://console.aws.amazon.com/amplify"

@@ -5,7 +5,7 @@ import json
 import re
 import time
 import google.generativeai as genai
-import whisper
+# import whisper  # Moved inside AIEngine to handle Lambda environments without whisper
 from datetime import datetime, date
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
@@ -107,7 +107,12 @@ class AIEngine:
         try:
             logger.info("Using local Whisper for transcription...")
             if not self.whisper_model:
-                self.whisper_model = whisper.load_model(self.whisper_model_name)
+                try:
+                    import whisper
+                    self.whisper_model = whisper.load_model(self.whisper_model_name)
+                except ImportError:
+                    logger.error("Whisper library is not installed. Native transcription fallback unavailable.")
+                    raise Exception("Transcription failed: Local Whisper not found in Lambda. Please ensure Amazon Transcribe permissions are set.")
             
             result = self.whisper_model.transcribe(video_source, task=task)
             return result

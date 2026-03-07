@@ -1103,9 +1103,13 @@ def admin_list_all_projects():
 # ========================  MAIN  ========================
 
 if __name__ == "__main__":
-    port = int(os.getenv("FLASK_PORT", 5000))
-    logger.info("ClipSense API starting on http://localhost:%d", port)
-    # IMPORTANT: use_reloader=False prevents the debug reloader from
-    # spawning a second process that kills background threads.
-    app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
+    port = int(os.environ.get("PORT", 5000))
+    logger.info("ClipSense API starting on port %d", port)
+
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False,
+        use_reloader=False
+    )
 

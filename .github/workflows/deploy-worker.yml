@@ -1,0 +1,49 @@
+name: Deploy EC2 Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-worker.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Deploy to EC2 Worker
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_WORKER_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ec2-user/clipsense
+            git pull origin main
+            cd backend
+            
+            echo "Building worker container..."
+            docker build -f Dockerfile.worker -t clipsense-worker .
+            
+            echo "Stopping old container..."
+            docker stop clipsense-worker || true
+            docker rm clipsense-worker || true
+            
+            echo "Starting new container..."
+            docker run -d \
+              --name clipsense-worker \
+              --restart unless-stopped \
+              --env-file /etc/clipsense/.env \
+              clipsense-worker
+            
+            echo "Waiting for container to start..."
+            sleep 5
+            
+            echo "Container logs:"
+            docker logs clipsense-worker --tail 20
+            
+            echo "✓ Worker deployment complete"

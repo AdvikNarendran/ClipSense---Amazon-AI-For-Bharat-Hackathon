@@ -11,3 +11,4 @@ flask
 flask-cors
 imageio-ffmpeg
 boto3
+pymongo

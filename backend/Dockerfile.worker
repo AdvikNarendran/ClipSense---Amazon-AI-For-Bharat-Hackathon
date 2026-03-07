@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies for video processing
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install full requirements including ML dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy worker and utility files
+COPY worker.py db.py aws_utils.py email_utils.py ./
+COPY ai_engine.py video_processor.py emotion_analyzer.py attention_curve.py ./
+
+# Run worker
+CMD ["python", "worker.py"]

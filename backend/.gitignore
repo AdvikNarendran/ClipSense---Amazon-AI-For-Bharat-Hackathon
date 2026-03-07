@@ -3,7 +3,8 @@ __pycache__/
 *.py[cod]
 venv/
 .env
-
+*.sh
+*.ps1
 # Secrets
 config.json
 

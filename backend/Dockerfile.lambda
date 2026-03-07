@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+# Copy Lambda Web Adapter
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.3 /lambda-adapter /opt/extensions/lambda-adapter
+
+WORKDIR /app
+
+# Install minimal dependencies for API only
+COPY requirements-lambda.txt .
+RUN pip install --no-cache-dir -r requirements-lambda.txt
+
+# Copy Lambda API and utility files
+COPY lambda_api.py db.py aws_utils.py email_utils.py ./
+
+# Set environment variables
+ENV PORT=5000
+
+# Run Lambda API
+CMD ["python", "lambda_api.py"]

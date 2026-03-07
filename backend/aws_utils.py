@@ -103,16 +103,95 @@ class AWSAIEngine:
             logger.error(f"Transcribe Job Fetch Error: {e}")
             return None
 
-    def analyze_with_bedrock(self, prompt, model_id="global.anthropic.claude-haiku-4-5-20251001-v1:0"):
-        """Use Amazon Bedrock (Claude Haiku for cost-efficiency) to analyze text"""
+    def analyze_with_bedrock(self, prompt, model_id=None):
+        """Use Amazon Bedrock (Claude) to analyze text, fallback to Gemini if Bedrock fails"""
+        if model_id is None:
+            model_id = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
+        
         try:
+            # Prepare request body for Claude 3
+            request_body = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 2000,
+                "temperature": 0.7,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            }
+            
+            import json
             response = self.bedrock.invoke_model(
                 modelId=model_id,
-                body=f"{{ \"prompt\": \"{prompt}\", \"max_tokens\": 1000, \"temperature\": 0.7 }}"
+                body=json.dumps(request_body)
             )
-            return response['body'].read().decode('utf-8')
+            
+            # Parse response
+            response_body = json.loads(response['body'].read())
+            
+            # Extract text from Claude 3 response format
+            if 'content' in response_body and len(response_body['content']) > 0:
+                logger.info("Bedrock analysis successful")
+                return response_body['content'][0]['text']
+            
+            logger.warning("Unexpected Bedrock response format, falling back to Gemini")
+            return self._fallback_to_gemini(prompt)
+            
         except ClientError as e:
-            logger.error(f"Bedrock Error: {e}")
+            logger.error(f"Bedrock Error: {e}, falling back to Gemini")
+            return self._fallback_to_gemini(prompt)
+        except Exception as e:
+            logger.error(f"Bedrock Unexpected Error: {e}, falling back to Gemini")
+            return self._fallback_to_gemini(prompt)
+    
+    def _fallback_to_gemini(self, prompt):
+        """Fallback to Google Gemini API when Bedrock fails"""
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_api_key:
+            logger.error("GEMINI_API_KEY not set, cannot fallback")
+            return None
+        
+        try:
+            import google.generativeai as genai
+            
+            # Configure Gemini
+            genai.configure(api_key=gemini_api_key)
+            
+            # Try models in order of preference
+            usable_text_models = [
+                "models/gemini-3.1-flash-lite-preview",
+                "models/gemini-3-flash-preview",
+
+                "models/gemma-3-1b-it",
+                "models/gemma-3-4b-it",
+                "models/gemma-3-12b-it",
+                "models/gemma-3-27b-it",
+                "models/gemma-3n-e2b-it",
+                "models/gemma-3n-e4b-it"
+            ]
+            
+            for model_name in usable_models:
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    response = model.generate_content(prompt)
+                    
+                    if response and response.text:
+                        logger.info(f"Gemini fallback successful with model: {model_name}")
+                        return response.text
+                except Exception as model_error:
+                    logger.warning(f"Gemini model {model_name} failed: {model_error}")
+                    continue
+            
+            logger.error("All Gemini models failed")
+            return None
+            
+        except ImportError:
+            logger.error("google-generativeai package not installed")
+            return None
+        except Exception as e:
+            logger.error(f"Gemini fallback error: {e}")
             return None
 
     def start_video_analysis(self, bucket, key):

@@ -29,3 +29,18 @@ frontend/next-env.d.ts
 # IDEs
 .vscode/
 .idea/
+
+# AWS & Deployment (DO NOT COMMIT)
+*.pem
+*.ppk
+.aws/
+backend/.env
+frontend/.env.local
+
+# Temporary files
+*.log
+*.tmp
+/tmp/
+*.swp
+*.swo
+*~
