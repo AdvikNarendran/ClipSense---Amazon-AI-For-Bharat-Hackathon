@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // REQUIRED for AWS Amplify SSR deployment
+  // REQUIRED for AWS Amplify SSR
   output: "standalone",
 
   async rewrites() {
