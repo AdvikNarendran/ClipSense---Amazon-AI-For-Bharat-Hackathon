@@ -1,8 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+
+  // REQUIRED for AWS Amplify SSR deployment
+  output: "standalone",
+
   async rewrites() {
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    const backendUrl =
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
     return [
       {
         source: "/api/backend/:path*",
