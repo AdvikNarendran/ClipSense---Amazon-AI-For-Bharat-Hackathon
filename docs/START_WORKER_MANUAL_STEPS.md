@@ -67,7 +67,7 @@ SQS Queue: https://sqs.ap-south-1.amazonaws.com/732772501496/clipsense-processin
 ## Verification Checklist
 
 - [ ] Container is running: `docker ps | grep clipsense-worker`
-- [ ] Gemini API key is set: Should show `AIzaSyDw2QxVe34KE3OwZ-ldl7VTzsd1YqY0rFg`
+- [ ] Gemini API key is set: Should show your api key
 - [ ] Worker is polling SQS: Check logs for "Starting SQS polling loop"
 - [ ] No errors in logs: `docker logs clipsense-worker --tail 50`
 
