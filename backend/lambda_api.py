@@ -403,11 +403,132 @@ def google_auth():
 
 ALLOWED_EXTENSIONS = {'mp4', 'mov', 'avi', 'mp3', 'wav', 'm4a', 'mkv', 'webm'}
 
+@app.route("/api/upload/presigned-url", methods=["POST"])
+@jwt_required()
+@rate_limit(limit=10, window=300)
+def get_presigned_upload_url():
+    """Generate a pre-signed URL for direct S3 upload (bypasses API Gateway 10MB limit)."""
+    user_id = get_jwt_identity()
+    data = request.json
+    
+    filename = data.get("filename")
+    if not filename:
+        return jsonify({"error": "Filename is required"}), 400
+    
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    if ext not in ALLOWED_EXTENSIONS:
+        return jsonify({"error": f"Unsupported format '.{ext}'. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"}), 400
+    
+    project_id = str(uuid.uuid4())[:8]
+    s3_key = f"uploads/{user_id}/{project_id}/{filename}"
+    
+    # Generate pre-signed POST URL for direct S3 upload
+    try:
+        presigned_post = s3_storage.s3_client.generate_presigned_post(
+            Bucket=s3_storage.bucket_name,
+            Key=s3_key,
+            Fields={"acl": "private"},
+            Conditions=[
+                {"acl": "private"},
+                ["content-length-range", 1, 5368709120]  # 5GB max
+            ],
+            ExpiresIn=3600  # 1 hour
+        )
+        
+        return jsonify({
+            "projectId": project_id,
+            "s3Key": s3_key,
+            "uploadUrl": presigned_post['url'],
+            "uploadFields": presigned_post['fields']
+        }), 200
+    except Exception as e:
+        logger.error("Failed to generate presigned URL: %s", e)
+        return jsonify({"error": "Failed to generate upload URL"}), 500
+
+@app.route("/api/upload/complete", methods=["POST"])
+@jwt_required()
+@rate_limit(limit=10, window=300)
+def complete_upload():
+    """Complete the upload after file is uploaded to S3 via presigned URL."""
+    user_id = get_jwt_identity()
+    data = request.json
+    
+    project_id = data.get("projectId")
+    filename = data.get("filename")
+    s3_key = data.get("s3Key")
+    max_duration = int(data.get("maxDuration", 15))
+    num_clips = int(data.get("numClips", 3))
+    use_subs = data.get("useSubs", True)
+    
+    if not all([project_id, filename, s3_key]):
+        return jsonify({"error": "Missing required fields"}), 400
+    
+    s3_uri = f"s3://{s3_storage.bucket_name}/{s3_key}"
+    title = os.path.splitext(filename)[0]
+    
+    project = {
+        "projectId": project_id,
+        "userId": user_id,
+        "title": title,
+        "filename": filename,
+        "s3Uri": s3_uri,
+        "s3Key": s3_key,
+        "createdAt": datetime.utcnow().isoformat() + "Z",
+        "duration": None,
+        "status": "uploaded",
+        "maxDuration": max_duration,
+        "numClips": num_clips,
+        "useSubs": use_subs,
+        "clips": [],
+        "clipCount": 0,
+        "avgEngagement": 0,
+        "transcription": None,
+        "currentStep": "Waiting...",
+        "progress": 0,
+        "analysis": None,
+        "emotionData": None,
+        "attentionCurve": None,
+        "error": None,
+    }
+    
+    db.create_project(project)
+    
+    # Send processing job to SQS
+    if SQS_QUEUE_URL:
+        try:
+            message_body = {
+                "projectId": project_id,
+                "userId": user_id,
+                "s3Uri": s3_uri,
+                "s3Key": s3_key,
+                "settings": {
+                    "maxDuration": max_duration,
+                    "numClips": num_clips,
+                    "useSubs": use_subs
+                },
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            
+            sqs_client.send_message(
+                QueueUrl=SQS_QUEUE_URL,
+                MessageBody=json.dumps(message_body)
+            )
+            logger.info("Sent processing job to SQS for project %s", project_id)
+        except Exception as e:
+            logger.error("Failed to send SQS message: %s", e)
+    
+    if "_id" in project:
+        project["_id"] = str(project["_id"])
+    
+    logger.info("Created project %s for user %s", project_id, user_id)
+    return jsonify({"id": project_id, "project": project}), 201
+
 @app.route("/api/upload", methods=["POST"])
 @jwt_required()
 @rate_limit(limit=5, window=300)
 def upload_video():
-    """Accept video upload, save to S3, and send processing job to SQS."""
+    """Accept video upload, save to S3, and send processing job to SQS.
+    NOTE: This endpoint has a 10MB limit due to API Gateway. Use /api/upload/presigned-url for larger files."""
     user_id = get_jwt_identity()
 
     if "file" not in request.files:
@@ -566,6 +687,24 @@ def get_project_status_route(project_id):
         "progress": project.get("progress"),
         "error": project.get("error")
     })
+
+@app.route("/api/projects/<project_id>/process", methods=["POST"])
+@jwt_required()
+def process_project_route(project_id):
+    """Trigger processing for a project (legacy endpoint - processing is automatic via SQS)."""
+    user_id = get_jwt_identity()
+    project = db.get_project(project_id, user_id)
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    # In cloud architecture, processing is triggered automatically when video is uploaded
+    # This endpoint exists for frontend compatibility but doesn't need to do anything
+    # The SQS message was already sent during upload
+    
+    return jsonify({
+        "message": "Processing already initiated",
+        "status": project.get("status", "processing")
+    }), 200
 
 # ========================  CLIP DOWNLOAD  ========================
 

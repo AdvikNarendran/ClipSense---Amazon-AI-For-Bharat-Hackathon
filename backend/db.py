@@ -15,12 +15,19 @@ logger = logging.getLogger("clipsense.db")
 class Database:
     def __init__(self):
         # Determine if we should use DynamoDB (AWS) or MongoDB (Local)
-        # In a real AWS environment, AWS_REGION is almost always set.
-        self.use_aws = os.getenv("AWS_REGION") is not None
+        # Check for DynamoDB table names instead of AWS_REGION (which is reserved in Lambda)
+        self.use_aws = bool(os.getenv("DYNAMO_USERS_TABLE") and os.getenv("DYNAMO_PROJECTS_TABLE"))
         
-        # Initialize both if possible to allow live fallbacks
-        self._init_dynamodb()
-        self._init_mongodb()
+        # Initialize based on environment
+        if self.use_aws:
+            self._init_dynamodb()
+            # Skip MongoDB initialization in AWS Lambda to avoid timeout
+            self.db = None
+            self.client = None
+        else:
+            self._init_mongodb()
+            # Initialize DynamoDB as fallback if credentials available
+            self._init_dynamodb()
 
     def _init_mongodb(self):
         mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
