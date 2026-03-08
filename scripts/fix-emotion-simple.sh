@@ -1,62 +1,48 @@
-"""
-EC2 Worker for ClipSense - Video processing worker that polls SQS queue.
-This module handles video processing jobs from SQS, including transcription,
-AI analysis, emotion detection, and clip rendering.
-"""
+#!/bin/bash
+# Simple fix for emotion analysis - replace the entire process_video_job function
 
-import os
+echo "=========================================="
+echo "Fixing Emotion Analysis on EC2 Worker"
+echo "=========================================="
+
+echo "Step 1: Backup current worker.py"
+docker exec clipsense-worker cp /app/worker.py /app/worker.py.backup.$(date +%s)
+echo "✓ Backup created"
+
+echo ""
+echo "Step 2: Create fixed process_video_job function"
+docker exec clipsense-worker bash -c 'cat > /tmp/fix_emotion.py << '\''PYEOF'\''
 import sys
-import json
-import time
-import shutil
-import logging
-import tempfile
-import boto3
-from datetime import datetime
 
-from dotenv import load_dotenv
-load_dotenv()
+# Read the current worker.py
+with open("/app/worker.py", "r") as f:
+    lines = f.readlines()
 
-from db import db
-from aws_utils import s3_storage
-from ai_engine import AIEngine
-from video_processor import process_video
-from emotion_analyzer import analyze_emotions
-from attention_curve import generate_attention_curve
-from email_utils import send_processing_complete
+# Find where process_video_job function starts
+start_idx = None
+for i, line in enumerate(lines):
+    if "def process_video_job(message_body):" in line:
+        start_idx = i
+        break
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-logger = logging.getLogger("clipsense-worker")
-
-# ---------------------------------------------------------------------------
-# AWS Clients
-# ---------------------------------------------------------------------------
-sqs_client = boto3.client('sqs', region_name=os.getenv('AWS_REGION', 'ap-south-1'))
-SQS_QUEUE_URL = os.getenv('SQS_QUEUE_URL')
-
-if not SQS_QUEUE_URL:
-    logger.error("SQS_QUEUE_URL not set in environment. Worker cannot start.")
+if start_idx is None:
+    print("ERROR: Could not find process_video_job function")
     sys.exit(1)
 
-# ---------------------------------------------------------------------------
-# AI Engine Instance
-# ---------------------------------------------------------------------------
-_engine_instance = AIEngine()
-logger.info("AI Engine initialized")
+# Find where the next function starts (poll_sqs_queue)
+end_idx = None
+for i in range(start_idx + 1, len(lines)):
+    if lines[i].startswith("def ") or lines[i].startswith("# ---"):
+        end_idx = i
+        break
 
-# ---------------------------------------------------------------------------
-# Processing Logic
-# ---------------------------------------------------------------------------
+if end_idx is None:
+    print("ERROR: Could not find end of process_video_job function")
+    sys.exit(1)
 
-def process_video_job(message_body):
-    """Process a single video job from SQS message."""
+# The fixed function
+fixed_function = """def process_video_job(message_body):
+    \"\"\"Process a single video job from SQS message.\"\"\"
     project_id = message_body.get("projectId")
     user_id = message_body.get("userId")
     s3_uri = message_body.get("s3Uri")
@@ -90,8 +76,8 @@ def process_video_job(message_body):
         
         logger.info("[WORKER] Downloading source from S3 for emotion analysis: %s", s3_uri)
         s3 = s3_storage.s3_client
-        bucket = s3_uri.split('/')[2]
-        key = "/".join(s3_uri.split('/')[3:])
+        bucket = s3_uri.split(\'/\')[2]
+        key = "/".join(s3_uri.split(\'/\')[3:])
         s3.download_file(bucket, key, local_video_path)
         
         # STEP 2.1: Audio Emotion Analysis
@@ -219,71 +205,65 @@ def process_video_job(message_body):
         db.update_project(project_id, {"status": "error", "error": str(e)})
         raise
 
-# ---------------------------------------------------------------------------
-# SQS Polling Loop
-# ---------------------------------------------------------------------------
+"""
 
-def poll_sqs_queue():
-    """Poll SQS queue for processing jobs."""
-    logger.info("[WORKER] Starting SQS polling loop...")
-    logger.info("[WORKER] Queue URL: %s", SQS_QUEUE_URL)
-    
-    while True:
-        try:
-            # Long polling with 20-second wait time
-            response = sqs_client.receive_message(
-                QueueUrl=SQS_QUEUE_URL,
-                MaxNumberOfMessages=1,
-                WaitTimeSeconds=20,
-                VisibilityTimeout=3600  # 1 hour for processing
-            )
-            
-            messages = response.get('Messages', [])
-            
-            if not messages:
-                logger.debug("[WORKER] No messages in queue, continuing to poll...")
-                time.sleep(5)
-                continue
-            
-            for message in messages:
-                receipt_handle = message['ReceiptHandle']
-                message_body = json.loads(message['Body'])
-                
-                logger.info("[WORKER] Received job: %s", message_body.get("projectId"))
-                
-                try:
-                    # Process the video job
-                    process_video_job(message_body)
-                    
-                    # Delete message from queue after successful processing
-                    sqs_client.delete_message(
-                        QueueUrl=SQS_QUEUE_URL,
-                        ReceiptHandle=receipt_handle
-                    )
-                    logger.info("[WORKER] Deleted message from queue")
-                    
-                except Exception as e:
-                    logger.error("[WORKER] Job processing failed: %s", e)
-                    # Message will become visible again after visibility timeout
-                    # Consider implementing dead-letter queue for repeated failures
-        
-        except Exception as e:
-            logger.error("[WORKER] SQS polling error: %s", e)
-            time.sleep(10)  # Back off on errors
+# Replace the function
+new_lines = lines[:start_idx] + [fixed_function + "\n"] + lines[end_idx:]
 
-# ---------------------------------------------------------------------------
-# Main Entry Point
-# ---------------------------------------------------------------------------
+# Write back
+with open("/app/worker.py", "w") as f:
+    f.writelines(new_lines)
 
-if __name__ == "__main__":
-    logger.info("=" * 60)
-    logger.info("ClipSense EC2 Worker Starting")
-    logger.info("=" * 60)
-    logger.info("AWS Region: %s", os.getenv('AWS_REGION'))
-    logger.info("S3 Bucket: %s", os.getenv('AWS_S3_BUCKET'))
-    logger.info("DynamoDB Table: %s", os.getenv('DYNAMO_PROJECTS_TABLE'))
-    logger.info("SQS Queue: %s", SQS_QUEUE_URL)
-    logger.info("=" * 60)
-    
-    # Start polling
-    poll_sqs_queue()
+print("✓ Function replaced successfully")
+PYEOF
+'
+
+echo ""
+echo "Step 3: Run the fix script"
+docker exec clipsense-worker python3 /tmp/fix_emotion.py
+
+if [ $? -eq 0 ]; then
+    echo "✓ Fix applied successfully"
+else
+    echo "✗ Fix failed - restoring backup"
+    docker exec clipsense-worker bash -c 'cp /app/worker.py.backup.* /app/worker.py 2>/dev/null || true'
+    exit 1
+fi
+
+echo ""
+echo "Step 4: Verify the changes"
+echo "Checking for video download code..."
+docker exec clipsense-worker grep -c "Download video for emotion analysis" /app/worker.py
+
+echo ""
+echo "Checking for audio_path parameter..."
+docker exec clipsense-worker grep -c "audio_path=local_video_path" /app/worker.py
+
+echo ""
+echo "Step 5: Restart worker container"
+docker restart clipsense-worker
+
+echo ""
+echo "Step 6: Wait for container to start..."
+sleep 5
+
+echo ""
+echo "Step 7: Check worker status"
+docker ps | grep clipsense-worker
+
+echo ""
+echo "Step 8: View recent logs"
+docker logs --tail 30 clipsense-worker
+
+echo ""
+echo "=========================================="
+echo "✓ Emotion Analysis Fix Complete!"
+echo "=========================================="
+echo ""
+echo "Next steps:"
+echo "1. Upload a test video"
+echo "2. Check that emotion data appears in the project"
+echo "3. Verify no 'local_video_path' errors in logs"
+echo ""
+echo "If issues persist, backups are available at:"
+echo "  /app/worker.py.backup.*"

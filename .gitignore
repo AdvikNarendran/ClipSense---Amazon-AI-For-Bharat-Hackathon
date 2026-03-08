@@ -38,6 +38,17 @@ frontend/next-env.d.ts
 backend/.env
 frontend/.env.local
 
+# Deployment scripts with credentials (DO NOT COMMIT)
+deploy-worker-remote.ps1
+scripts/deploy-worker-remote.ps1
+scripts/update-ec2-gemini-key.ps1
+scripts/deploy-worker-ec2.sh
+docs/DEPLOY_WORKER_NOW.md
+docs/EC2_WORKER_DEPLOYMENT_GUIDE.md
+
+# Admin tools (DO NOT COMMIT)
+backend/get_admin_credentials.py
+
 # Temporary files
 *.log
 *.tmp

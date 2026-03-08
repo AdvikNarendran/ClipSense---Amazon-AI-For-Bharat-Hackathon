@@ -229,7 +229,7 @@ export default function AuthFlow() {
               disabled={loading}
               className="w-full bg-gradient-to-r from-[#17503F] to-[#1a6b52] text-white font-bold py-4 rounded-xl hover:scale-[1.02] transform transition-all active:scale-[0.98] border border-white/10 shadow-lg shadow-black/20 disabled:opacity-50"
             >
-              {loading ? "Creating..." : "Start Free Trial"}
+              {loading ? "Creating..." : "Register"}
             </button>
             <div className="text-center pt-2">
               <span className="text-sm text-white/30">Already a member? </span>

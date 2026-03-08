@@ -130,7 +130,12 @@ export default function ProjectDetailsPage() {
       {/* Status Banner */}
       {project.status === "processing" && (
         <div className="wf-panel p-4 mb-6 text-center animate-pulse bg-yellow-50 border-yellow-200">
-          🧠 {project.currentStep || "AI is processing your video…"} This may take a few minutes.
+          <div className="mb-1">
+            🧠 {project.currentStep || "AI is processing your video…"} This may take a few minutes.
+          </div>
+          <div className="text-sm text-black/60">
+            📧 You will receive an email notification once processing is complete.
+          </div>
         </div>
       )}
 

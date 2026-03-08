@@ -663,7 +663,12 @@ def get_project_route(project_id):
 def get_project_clips(project_id):
     """Return all clips for a specific project."""
     user_id = get_jwt_identity()
-    project = db.get_project(project_id, user_id)
+    claims = get_jwt()
+    if claims.get("role") == "admin":
+        project = db.get_project(project_id)
+    else:
+        project = db.get_project(project_id, user_id)
+    
     if not project:
         return jsonify({"error": "Project not found"}), 404
     
@@ -677,7 +682,12 @@ def get_project_clips(project_id):
 def get_project_status_route(project_id):
     """Return the current status and progress of a project."""
     user_id = get_jwt_identity()
-    project = db.get_project(project_id, user_id)
+    claims = get_jwt()
+    if claims.get("role") == "admin":
+        project = db.get_project(project_id)
+    else:
+        project = db.get_project(project_id, user_id)
+    
     if not project:
         return jsonify({"error": "Project not found"}), 404
         
@@ -685,7 +695,8 @@ def get_project_status_route(project_id):
         "status": project.get("status"),
         "currentStep": project.get("currentStep"),
         "progress": project.get("progress"),
-        "error": project.get("error")
+        "error": project.get("error"),
+        "clipCount": len(project.get("clips", []))
     })
 
 @app.route("/api/projects/<project_id>/process", methods=["POST"])
@@ -713,8 +724,13 @@ def process_project_route(project_id):
 def download_clip(clip_id):
     """Generate a pre-signed URL for clip download."""
     user_id = get_jwt_identity()
+    claims = get_jwt()
     project_id = clip_id.rsplit("_clip_", 1)[0]
-    project = db.get_project(project_id, user_id)
+    
+    if claims.get("role") == "admin":
+        project = db.get_project(project_id)
+    else:
+        project = db.get_project(project_id, user_id)
 
     if not project:
         return jsonify({"error": "Not found"}), 404
@@ -731,12 +747,120 @@ def download_clip(clip_id):
 def stream_project_video(project_id):
     """Generate a pre-signed URL for original video streaming."""
     user_id = get_jwt_identity()
-    project = db.get_project(project_id, user_id)
+    claims = get_jwt()
+    if claims.get("role") == "admin":
+        project = db.get_project(project_id)
+    else:
+        project = db.get_project(project_id, user_id)
+    
     if not project:
         return jsonify({"error": "Not found"}), 404
 
     url = s3_storage.get_presigned_url(project['s3Key'])
     return redirect(url)
+
+@app.route("/api/projects/<project_id>/transcript", methods=["GET"])
+@jwt_required()
+def download_transcript(project_id):
+    """Generate plain text transcript file."""
+    from flask import Response
+    
+    user_id = get_jwt_identity()
+    claims = get_jwt()
+    if claims.get("role") == "admin":
+        project = db.get_project(project_id)
+    else:
+        project = db.get_project(project_id, user_id)
+    
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    transcription = project.get("transcription", [])
+    if not transcription:
+        return jsonify({"error": "No transcription available"}), 404
+    
+    # Generate plain text format
+    txt_content = ""
+    for segment in transcription:
+        text = segment.get("text", "").strip()
+        if text:
+            txt_content += text + " "
+    
+    # Return as downloadable file
+    return Response(
+        txt_content.strip(),
+        mimetype="text/plain",
+        headers={
+            "Content-Disposition": f"attachment; filename={project.get('title', project_id)}.txt"
+        }
+    )
+
+@app.route("/api/projects/<project_id>/subtitles", methods=["GET"])
+@jwt_required()
+def download_subtitles(project_id):
+    """Generate subtitles file from transcription data."""
+    from flask import Response
+    
+    user_id = get_jwt_identity()
+    claims = get_jwt()
+    if claims.get("role") == "admin":
+        project = db.get_project(project_id)
+    else:
+        project = db.get_project(project_id, user_id)
+    
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    transcription = project.get("transcription", [])
+    if not transcription:
+        return jsonify({"error": "No transcription available"}), 404
+    
+    # Generate SRT format
+    srt_content = ""
+    for idx, segment in enumerate(transcription, 1):
+        start_time = segment.get("start", 0)
+        end_time = segment.get("end", 0)
+        text = segment.get("text", "")
+        
+        # Convert seconds to SRT time format (HH:MM:SS,mmm)
+        def format_time(seconds):
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = int(seconds % 60)
+            millis = int((seconds % 1) * 1000)
+            return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+        
+        srt_content += f"{idx}\n"
+        srt_content += f"{format_time(start_time)} --> {format_time(end_time)}\n"
+        srt_content += f"{text.strip()}\n\n"
+    
+    # Return as downloadable file
+    return Response(
+        srt_content,
+        mimetype="text/plain",
+        headers={
+            "Content-Disposition": f"attachment; filename={project.get('title', project_id)}.srt"
+        }
+    )
+
+# ========================  EMOTION DATA  ========================
+
+@app.route("/api/projects/<project_id>/emotions", methods=["GET"])
+@jwt_required()
+def get_project_emotions(project_id):
+    """Get emotion analysis data for a project."""
+    user_id = get_jwt_identity()
+    claims = get_jwt()
+    if claims.get("role") == "admin":
+        project = db.get_project(project_id)
+    else:
+        project = db.get_project(project_id, user_id)
+    
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    emotion_data = project.get("emotionData", [])
+    return jsonify(emotion_data)
 
 # ========================  DELETE PROJECT  ========================
 
@@ -768,17 +892,27 @@ def delete_project_route(project_id):
 @role_required("admin")
 def admin_metrics():
     """Get admin metrics."""
-    metrics = db.get_admin_metrics()
+    # Return basic metrics - can be enhanced later
+    metrics = {
+        "activeJobs": 0,  # Would need to query SQS
+        "queueLength": 0,  # Would need to query SQS
+        "totalProcessed": len(db.list_all_projects_admin()),
+        "errorRate": 0,  # Would need to calculate from projects
+        "avgProcessingTimeSec": 300,  # Placeholder
+        "engineReady": True,
+        "dbReady": db.is_connected()
+    }
     return jsonify(metrics), 200
 
 @app.route("/api/admin/users", methods=["GET"])
 @role_required("admin")
 def admin_list_users():
     """List all users (admin only)."""
-    users = db.list_all_users()
+    users = db.list_all_users_with_stats()
     return jsonify(users), 200
 
 @app.route("/api/admin/projects", methods=["GET"])
+@app.route("/api/admin/all-projects", methods=["GET"])  # Add alias for frontend compatibility
 @role_required("admin")
 def admin_list_all_projects():
     """List all projects (admin only)."""
