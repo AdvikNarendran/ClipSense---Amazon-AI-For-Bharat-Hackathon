@@ -74,8 +74,8 @@ git push origin main
 Go to: GitHub Repo → Settings → Secrets and variables → Actions
 
 Add these 5 secrets:
-1. **AWS_ACCESS_KEY_ID**: `AKIA2VHFFA74CLZ5QNHR`
-2. **AWS_SECRET_ACCESS_KEY**: `J6sxjmwjcarGlnqf7WBkhProKid22dc2qHfxZwjM`
+1. **AWS_ACCESS_KEY_ID**: `<your-aws-access-key-id>`
+2. **AWS_SECRET_ACCESS_KEY**: `<your-aws-secret-access-key>`
 3. **EC2_WORKER_HOST**: `<your-ec2-public-ip>`
 4. **EC2_SSH_KEY**: `<content-of-clipsense-worker-key.pem>`
 5. **API_GATEWAY_URL**: `<your-api-gateway-url>`

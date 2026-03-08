@@ -1,6 +1,9 @@
 import google.generativeai as genai
+import os
+from dotenv import load_dotenv
 
-genai.configure(api_key="AIzaSyDp2hsS2hM5JNpt_tP35eqgeuG4gWU-XdM")
+load_dotenv()
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 for model in genai.list_models():
     # Filter for models that support content generation (e.g., text, images)

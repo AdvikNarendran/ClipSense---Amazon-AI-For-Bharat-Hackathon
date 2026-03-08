@@ -5,6 +5,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+checkmodels.py
 
 # Backend
 backend/__pycache__/

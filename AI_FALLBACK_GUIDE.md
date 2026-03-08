@@ -49,7 +49,7 @@ ClipSense uses a smart fallback system for AI analysis:
 
 From your `.env` file:
 ```bash
-GEMINI_API_KEY=AIzaSyDp2hsS2hM5JNpt_tP35eqgeuG4gWU-XdM
+GEMINI_API_KEY=<your-gemini-api-key>
 BEDROCK_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
 ```
 

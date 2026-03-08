@@ -17,12 +17,12 @@ GitHub Secrets are encrypted environment variables that GitHub Actions workflows
 **What it is**: Your AWS account access key (like a username)
 
 **Where to get it**: 
-- Already in your `.env` file: `AKIA2VHFFA74CLZ5QNHR`
+- Check your `.env` file for `AWS_ACCESS_KEY_ID`
 - Or create new one: AWS Console → IAM → Users → Your User → Security Credentials → Create Access Key
 
 **Value to paste**:
 ```
-AKIA2VHFFA74CLZ5QNHR
+<your-aws-access-key-id>
 ```
 
 ---
@@ -31,12 +31,12 @@ AKIA2VHFFA74CLZ5QNHR
 **What it is**: Your AWS secret key (like a password)
 
 **Where to get it**: 
-- Already in your `.env` file: `J6sxjmwjcarGlnqf7WBkhProKid22dc2qHfxZwjM`
+- Check your `.env` file for `AWS_SECRET_ACCESS_KEY`
 - Or from the same place you got the access key
 
 **Value to paste**:
 ```
-J6sxjmwjcarGlnqf7WBkhProKid22dc2qHfxZwjM
+<your-aws-secret-access-key>
 ```
 
 ---
