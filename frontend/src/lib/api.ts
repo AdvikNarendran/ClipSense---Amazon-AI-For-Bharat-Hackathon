@@ -116,47 +116,81 @@ export async function uploadVideo(
   options: { maxDuration?: number; useSubs?: boolean; numClips?: number } = {},
   onProgress?: (pct: number) => void
 ): Promise<{ id: string; project: Project }> {
-  const formData = new FormData();
-  formData.append("file", file);
-  if (options.maxDuration) formData.append("maxDuration", String(options.maxDuration));
-  if (options.useSubs !== undefined) formData.append("useSubs", String(options.useSubs));
-  if (options.numClips) formData.append("numClips", String(options.numClips));
+  try {
+    // Step 1: Get presigned URL from backend
+    const presignedResponse = await apiFetch<{
+      projectId: string;
+      s3Key: string;
+      uploadUrl: string;
+      uploadFields: Record<string, string>;
+    }>("/api/upload/presigned-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file.name }),
+    });
 
-  // Use XHR for progress tracking
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${API_BASE}/api/upload`);
+    const { projectId, s3Key, uploadUrl, uploadFields } = presignedResponse;
 
-    // Auth header for XHR
-    const token = typeof window !== "undefined" ? localStorage.getItem("clipsense_token") : null;
-    if (token) {
-      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    }
+    // Step 2: Upload directly to S3 using presigned POST
+    await new Promise<void>((resolve, reject) => {
+      const formData = new FormData();
 
-    xhr.upload.onprogress = (evt) => {
-      if (evt.lengthComputable && onProgress) {
-        onProgress(Math.round((evt.loaded / evt.total) * 100));
-      }
-    };
+      // Add all presigned fields first
+      Object.entries(uploadFields).forEach(([key, value]) => {
+        formData.append(key, value);
+      });
 
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          resolve(JSON.parse(xhr.responseText));
-        } catch {
-          reject(new Error("Invalid JSON response"));
+      // Add the file last (important for S3)
+      formData.append("file", file);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", uploadUrl);
+
+      xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable && onProgress) {
+          onProgress(Math.round((evt.loaded / evt.total) * 100));
         }
-      } else {
-        reject(new Error(xhr.responseText || `Upload failed (${xhr.status})`));
-      }
-    };
+      };
 
-    xhr.onerror = () => reject(new Error("Network error during upload"));
-    xhr.onabort = () => reject(new Error("Upload aborted"));
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(new Error(`S3 upload failed (${xhr.status})`));
+        }
+      };
 
-    xhr.send(formData);
-  });
+      xhr.onerror = () => reject(new Error("Network error during S3 upload"));
+      xhr.onabort = () => reject(new Error("Upload aborted"));
+
+      xhr.send(formData);
+    });
+
+    // Step 3: Notify backend that upload is complete
+    const result = await apiFetch<{ id: string; project: Project }>("/api/upload/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        filename: file.name,
+        s3Key,
+        maxDuration: options.maxDuration || 15,
+        numClips: options.numClips || 3,
+        useSubs: options.useSubs !== undefined ? options.useSubs : true,
+      }),
+    });
+
+    return result;
+  } catch (error) {
+    // Fallback to old upload method for small files (<10MB) if presigned URL fails
+    if (file.size < 10 * 1024 * 1024) {
+      console.warn("Presigned upload failed, falling back to direct upload for small file");
+      return uploadVideoLegacy(file, options, onProgress);
+    }
+    throw error;
+  }
 }
+
 
 // ---------------------------------------------------------------------------
 // Projects
