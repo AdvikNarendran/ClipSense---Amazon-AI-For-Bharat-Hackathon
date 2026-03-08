@@ -45,6 +45,7 @@ scripts/update-ec2-gemini-key.ps1
 scripts/deploy-worker-ec2.sh
 docs/DEPLOY_WORKER_NOW.md
 docs/EC2_WORKER_DEPLOYMENT_GUIDE.md
+docs/START_WORKER_MANUAL_STEPS.md
 
 # Admin tools (DO NOT COMMIT)
 backend/get_admin_credentials.py

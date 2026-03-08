@@ -869,19 +869,33 @@ def get_project_emotions(project_id):
 def delete_project_route(project_id):
     """Delete a project and all its associated files."""
     user_id = get_jwt_identity()
-    project = db.get_project(project_id, user_id)
-    if not project:
-        return jsonify({"error": "Project not found"}), 404
+    claims = get_jwt()
+    
+    # Admin can delete any project, regular users can only delete their own
+    if claims.get("role") == "admin":
+        project = db.get_project(project_id)
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+        # Use the project's actual owner for S3 cleanup
+        project_owner = project.get("userId")
+    else:
+        project = db.get_project(project_id, user_id)
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+        project_owner = user_id
 
     # Clean up S3 resources
     try:
-        s3_storage.delete_prefix(f"uploads/{user_id}/{project_id}/")
-        s3_storage.delete_prefix(f"clips/{user_id}/{project_id}/")
+        s3_storage.delete_prefix(f"uploads/{project_owner}/{project_id}/")
+        s3_storage.delete_prefix(f"clips/{project_owner}/{project_id}/")
     except Exception as e:
         logger.error("S3 cleanup failed during deletion for %s: %s", project_id, e)
 
-    # Remove from DB
-    db.delete_project(project_id, user_id)
+    # Remove from DB (admin can delete any project)
+    if claims.get("role") == "admin":
+        db.delete_project(project_id, project_owner)
+    else:
+        db.delete_project(project_id, user_id)
 
     logger.info("Deleted project %s from store", project_id)
     return jsonify({"message": "Project deleted", "id": project_id})
