@@ -191,6 +191,54 @@ export async function uploadVideo(
   }
 }
 
+// Legacy upload method (for files <10MB or as fallback)
+async function uploadVideoLegacy(
+  file: File,
+  options: { maxDuration?: number; useSubs?: boolean; numClips?: number } = {},
+  onProgress?: (pct: number) => void
+): Promise<{ id: string; project: Project }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (options.maxDuration) formData.append("maxDuration", String(options.maxDuration));
+  if (options.useSubs !== undefined) formData.append("useSubs", String(options.useSubs));
+  if (options.numClips) formData.append("numClips", String(options.numClips));
+
+  // Use XHR for progress tracking
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}/api/upload`);
+
+    // Auth header for XHR
+    const token = typeof window !== "undefined" ? localStorage.getItem("clipsense_token") : null;
+    if (token) {
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    }
+
+    xhr.upload.onprogress = (evt) => {
+      if (evt.lengthComputable && onProgress) {
+        onProgress(Math.round((evt.loaded / evt.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch {
+          reject(new Error("Invalid JSON response"));
+        }
+      } else {
+        reject(new Error(xhr.responseText || `Upload failed (${xhr.status})`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.onabort = () => reject(new Error("Upload aborted"));
+
+    xhr.send(formData);
+  });
+}
+
 
 // ---------------------------------------------------------------------------
 // Projects
