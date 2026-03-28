@@ -4,7 +4,7 @@
 
 ClipSense automatically identifies high-impact, viral-worthy moments from long-form video or audio content using advanced AI. The platform eliminates manual video scrubbing by detecting emotional peaks, semantic importance, and visual engagement, generating short clips with captions and marketing insights.
 
-**Live Demo**: [ClipSense Platform](https://main.d2yjqvvvvvvvvv.amplifyapp.com)
+**Live Demo**: [ClipSense Platform](https://main.d3ksgup2cfy60v.amplifyapp.com/)
 
 **Team Mindbenders**: Advik Narendran, Maddala Yagnasri Priya, Samrudhi Sudhir Kamble, and Sanjivani Prajapal Shendre
 
